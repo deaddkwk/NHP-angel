@@ -116,7 +116,7 @@ async def 용병시트(interaction: discord.Interaction, call_sign: str):
     await interaction.response.send_message(embed=embed)
 
 @tree.command(name="시트수정", description="시트 항목을 수정합니다. (쉼표로 구분)")
-@app_commands.describe(call_sign="대상 콜사인", field="수정할 항목명", 내용="쉼표로 구분된 내용")
+@app_commands.describe(call_sign="대상 콜사인", field="수정할 항목명입니다. license, skills, talents, core_bonus, hase, growth 등으로 수정하세요.", 내용="쉼표를 사용해서 구분해주세요.")
 async def 시트수정(interaction: discord.Interaction, call_sign: str, field: str, 내용: str):
     if not interaction.user.guild_permissions.administrator:
         await interaction.response.send_message("🚫 관리자만 사용할 수 있습니다.", ephemeral=True)
