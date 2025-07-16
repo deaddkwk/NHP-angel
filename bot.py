@@ -7,7 +7,7 @@ import json, os, copy
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
-tree = bot.tree
+tree = bot.tree 
 
 data_file = "players.json"
 
