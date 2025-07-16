@@ -118,12 +118,13 @@ async def 용병시트(interaction: discord.Interaction, call_sign: str):
 @tree.command(name="시트수정", description="시트 항목을 수정합니다. (쉼표로 구분)")
 @app_commands.describe(call_sign="대상 콜사인", field="수정할 항목명입니다. license, skills, talents, core_bonus, hase, growth 등으로 수정하세요.", 내용="쉼표를 사용해서 구분해주세요.")
 async def 시트수정(interaction: discord.Interaction, call_sign: str, field: str, 내용: str):
-    if not interaction.user.guild_permissions.administrator:
-        await interaction.response.send_message("🚫 관리자만 사용할 수 있습니다.", ephemeral=True)
-        return
+    user_id = str(interaction.user.id)
     data = get_player(call_sign)
     if not data:
         await interaction.response.send_message("❌ 존재하지 않는 콜사인입니다.", ephemeral=True)
+        return
+    if not interaction.user.guild_permissions.administrator and data.get("owner") != user_id:
+        await interaction.response.send_message("🚫 해당 시트를 수정할 권한이 없습니다.", ephemeral=True)
         return
     sheet = data.get("sheet", DEFAULT_SHEET)
     entries = [e.strip() for e in 내용.split(",") if e.strip()]
@@ -150,5 +151,77 @@ async def 시트수정(interaction: discord.Interaction, call_sign: str, field: 
     data["sheet"] = sheet
     save_player(call_sign, data)
     await interaction.response.send_message(f"✅ `{call_sign}` 시트의 `{field}` 항목이 수정되었습니다.")
+
+@tree.command(name="아이템지급", description="용병에게 아이템을 지급합니다. (관리자 전용)")
+@app_commands.describe(call_sign="대상 용병 콜사인", items="쉼표로 구분된 아이템 목록")
+async def 아이템지급(interaction: discord.Interaction, call_sign: str, items: str):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("🚫 관리자만 사용할 수 있습니다.", ephemeral=True)
+        return
+    data = get_player(call_sign)
+    if not data:
+        await interaction.response.send_message("❌ 존재하지 않는 콜사인입니다.", ephemeral=True)
+        return
+    item_list = [i.strip() for i in items.split(",") if i.strip()]
+    inventory = data.get("items", {})
+    if isinstance(inventory, list):  # 기존 리스트라면 딕셔너리로 변환
+        inventory_dict = {}
+        for i in inventory:
+            inventory_dict[i] = inventory_dict.get(i, 0) + 1
+        inventory = inventory_dict
+    for item in item_list:
+        inventory[item] = inventory.get(item, 0) + 1
+    data["items"] = inventory
+    save_player(call_sign, data)
+    embed = Embed(title="📦 아이템 지급 완료!", description=f"{call_sign}에게 다음 아이템이 지급되었습니다:", color=0x99ccff)
+    for item in item_list:
+        embed.add_field(name=item, value=f"수량: {inventory[item]}", inline=False)
+    await interaction.response.send_message(embed=embed)
+
+@tree.command(name="아이템삭제", description="용병에게서 아이템을 하나 제거합니다. (관리자 전용)")
+@app_commands.describe(call_sign="대상 용병 콜사인", item="삭제할 아이템 이름")
+async def 아이템삭제(interaction: discord.Interaction, call_sign: str, item: str):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("🚫 관리자만 사용할 수 있습니다.", ephemeral=True)
+        return
+    data = get_player(call_sign)
+    if not data:
+        await interaction.response.send_message("❌ 존재하지 않는 콜사인입니다.", ephemeral=True)
+        return
+    inventory = data.get("items", {})
+    if isinstance(inventory, list):
+        inventory_dict = {}
+        for i in inventory:
+            inventory_dict[i] = inventory_dict.get(i, 0) + 1
+        inventory = inventory_dict
+    if item not in inventory:
+        await interaction.response.send_message(f"❌ `{call_sign}`은(는) `{item}`을(를) 가지고 있지 않습니다.", ephemeral=True)
+        return
+    inventory[item] -= 1
+    if inventory[item] <= 0:
+        del inventory[item]
+    data["items"] = inventory
+    save_player(call_sign, data)
+    await interaction.response.send_message(f"🗑️ `{call_sign}`에게서 `{item}` 1개를 제거했습니다.")
+
+@tree.command(name="임무보상지급", description="여러 용병에게 임무 보상을 지급합니다. (관리자 전용)")
+@app_commands.describe(콜사인들="쉼표로 구분된 콜사인 목록", 만나="지급할 만나 수", 막간티켓="지급할 막간티켓 수")
+async def 임무보상지급(interaction: discord.Interaction, 콜사인들: str, 만나: int = 0, 막간티켓: int = 0):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("🚫 관리자만 사용할 수 있습니다.", ephemeral=True)
+        return
+    call_signs = [c.strip() for c in 콜사인들.split(",") if c.strip()]
+    results = []
+    for call_sign in call_signs:
+        data = get_player(call_sign)
+        if not data:
+            results.append(f"❌ `{call_sign}`: 존재하지 않음")
+            continue
+        data["만나"] = data.get("만나", 0) + 만나
+        data["막간티켓"] = data.get("막간티켓", 0) + 막간티켓
+        save_player(call_sign, data)
+        results.append(f"✅ `{call_sign}`: {만나} 만나, {막간티켓} 티켓 지급")
+    embed = Embed(title="🎁 임무 보상 지급 결과", description="\n".join(results), color=0x66cc99)
+    await interaction.response.send_message(embed=embed)
 
 bot.run(os.environ['DISCORD_TOKEN'])
