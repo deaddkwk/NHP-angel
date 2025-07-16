@@ -214,5 +214,24 @@ async def 시트수정(interaction: discord.Interaction, call_sign: str, target:
     save_data(data)
     await interaction.response.send_message(f"✅ `{call_sign}`의 `{target}` 항목이 성공적으로 수정되었습니다.", ephemeral=False)
 
+# ──────────────────────────────
+# RENDER 서버를 속이기 위한 포트 열기
+# ──────────────────────────────
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+class KeepAliveHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is running!")
+
+def run_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), KeepAliveHandler)
+    server.serve_forever()
+
+threading.Thread(target=run_server).start()
+
 # 봇 토큰 직접 입력 or 환경 변수로 처리
 bot.run(os.getenv("DISCORD_BOT_TOKEN"))
