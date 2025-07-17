@@ -11,17 +11,26 @@ tree = bot.tree
 
 keep_alive()  # Render 절전 모드 방지용 웹서버 실행
 
+FIELD_CHOICES = ["license", "skills", "talents", "core_bonus", "hase", "growth"]
+
+async def field_autocomplete(interaction: discord.Interaction, current: str):
+    return [
+        app_commands.Choice(name=field, value=field)
+        for field in FIELD_CHOICES
+        if current.lower() in field.lower()
+    ][:25]
+
 SHOP_ITEMS = {
     "메크 라이선스": {"cost": 500, "growth_key": "라이선스"},
     "재능": {"cost": 300, "growth_key": "재능"},
     "교육": {"cost": 200, "growth_key": "스킬"},
-    "메크 라이선스 교체": {"cost": 200},
-    "재능 교체": {"cost": 300},
-    "메크 스킬 초기화": {"cost": 150},
-    "코어 보너스 교체": {"cost": 300},
-    "1랭크 임무 해금": {"cost": 100},
-    "2랭크 임무 해금": {"cost": 200},
-    "3랭크 임무 해금": {"cost": 300},
+    "메크 라이선스 1랭크 교체": {"cost": 200},
+    "재능 전체 교체": {"cost": 300},
+    "메크 스킬 전체 초기화": {"cost": 150},
+    "코어 보너스 1개 교체": {"cost": 300},
+    "1랭크 임대": {"cost": 100},
+    "2랭크 임대": {"cost": 200},
+    "3랭크 임대": {"cost": 300},
 }
 
 DEFAULT_SHEET = {
@@ -37,6 +46,16 @@ DEFAULT_SHEET = {
         "총합": 0
     }
 }
+
+async def call_sign_autocomplete(interaction: discord.Interaction, current: str):
+    all_players = get_all_players()
+    if not all_players:
+        return []
+    return [
+        app_commands.Choice(name=cs, value=cs)
+        for cs in all_players.keys()
+        if current.lower() in cs.lower()
+    ][:25]
 
 @bot.event
 async def on_ready():
@@ -108,6 +127,7 @@ async def 용병정보(interaction: discord.Interaction, call_sign: str):
     owner = await bot.fetch_user(int(info["owner"]))
     embed.set_footer(text=f"소유자: {owner.name}")
     await interaction.response.send_message(embed=embed)
+용병정보.autocomplete("call_sign")(call_sign_autocomplete)
 
 @tree.command(name="용병시트", description="특정 용병의 시트를 확인합니다.")
 @app_commands.describe(call_sign="조회할 용병의 콜사인")
@@ -127,6 +147,7 @@ async def 용병시트(interaction: discord.Interaction, call_sign: str):
     growth = sheet.get("growth_cost", {})
     embed.set_footer(text=f"성장에 소모한 만나 총합: {growth.get('총합', 0)} 만나")
     await interaction.response.send_message(embed=embed)
+용병시트.autocomplete("call_sign")(call_sign_autocomplete)
 
 @tree.command(name="시트수정", description="시트 항목을 수정합니다. (쉼표로 구분)")
 @app_commands.describe(call_sign="대상 콜사인", field="수정할 항목명입니다. license, skills, talents, core_bonus, hase, growth 등으로 수정하세요.", 내용="쉼표를 사용해서 구분해주세요.")
@@ -164,6 +185,8 @@ async def 시트수정(interaction: discord.Interaction, call_sign: str, field: 
     data["sheet"] = sheet
     save_player(call_sign, data)
     await interaction.response.send_message(f"✅ `{call_sign}` 시트의 `{field}` 항목이 수정되었습니다.")
+시트수정.autocomplete("call_sign")(call_sign_autocomplete)
+시트수정.autocomplete("field")(field_autocomplete)
 
 @tree.command(name="아이템지급", description="용병에게 아이템을 지급합니다. (관리자 전용)")
 @app_commands.describe(call_sign="대상 용병 콜사인", items="쉼표로 구분된 아이템 목록")
@@ -190,6 +213,7 @@ async def 아이템지급(interaction: discord.Interaction, call_sign: str, item
     for item in item_list:
         embed.add_field(name=item, value=f"수량: {inventory[item]}", inline=False)
     await interaction.response.send_message(embed=embed)
+아이템지급.autocomplete("call_sign")(call_sign_autocomplete)
 
 @tree.command(name="아이템삭제", description="용병에게서 아이템을 하나 제거합니다. (관리자 전용)")
 @app_commands.describe(call_sign="대상 용병 콜사인", item="삭제할 아이템 이름")
@@ -216,6 +240,7 @@ async def 아이템삭제(interaction: discord.Interaction, call_sign: str, item
     data["items"] = inventory
     save_player(call_sign, data)
     await interaction.response.send_message(f"🗑️ `{call_sign}`에게서 `{item}` 1개를 제거했습니다.")
+아이템삭제.autocomplete("call_sign")(call_sign_autocomplete)
 
 @tree.command(name="임무보상지급", description="여러 용병에게 임무 보상을 지급합니다. (관리자 전용)")
 @app_commands.describe(콜사인들="쉼표로 구분된 콜사인 목록", 만나="지급할 만나 수", 막간티켓="지급할 막간티켓 수")
@@ -236,6 +261,7 @@ async def 임무보상지급(interaction: discord.Interaction, 콜사인들: str
         results.append(f"✅ `{call_sign}`: {만나} 만나, {막간티켓} 티켓 지급")
     embed = Embed(title="🎁 임무 보상 지급 결과", description="\n".join(results), color=0x66cc99)
     await interaction.response.send_message(embed=embed)
+
 # 상점리스트 명령어
 @tree.command(name="상점리스트", description="일반 구매 가능한 항목과 가격을 확인합니다.")
 async def 상점리스트(interaction):
@@ -245,7 +271,7 @@ async def 상점리스트(interaction):
         if "growth_key" in data:
             embed.add_field(name=f"{data['cost']} 만나", value=name, inline=True)
     embed.add_field(name="\u200b", value="\u200b", inline=False)
-    embed.add_field(name="🔄 교체/해금 항목", value="", inline=False)
+    embed.add_field(name="🔄 교체/임대 항목", value="", inline=False)
     for name, data in SHOP_ITEMS.items():
         if "growth_key" not in data:
             embed.add_field(name=f"{data['cost']} 만나", value=name, inline=True)
@@ -294,5 +320,67 @@ async def 일반구매(interaction, call_sign: str, 항목: str):
     embed.add_field(name="구매 항목", value=항목, inline=True)
     embed.add_field(name="소모한 만나", value=f"{cost} 만나", inline=True)
     await interaction.response.send_message(embed=embed)
+일반구매.autocomplete("call_sign")(call_sign_autocomplete)
+
+# 막간 행동 선언 명령어
+@tree.command(name="막간", description="막간 티켓을 사용하여 어디서 무엇을 하는지 선언합니다.")
+@app_commands.describe(call_sign="대상 용병 콜사인", 장소="어디서 행동하는지", 행동="무엇을 하는지")
+async def 막간(interaction: discord.Interaction, call_sign: str, 장소: str, 행동: str):
+    data = get_player(call_sign)
+    if not data:
+        await interaction.response.send_message("❌ 존재하지 않는 콜사인입니다.", ephemeral=True)
+        return
+    if data.get("owner") != str(interaction.user.id):
+        await interaction.response.send_message("🚫 당신은 이 용병의 소유자가 아닙니다.", ephemeral=True)
+        return
+    if data.get("막간티켓", 0) <= 0:
+        await interaction.response.send_message("❌ 막간 티켓이 부족합니다.", ephemeral=True)
+        return
+
+    data["막간티켓"] -= 1
+    save_player(call_sign, data)
+
+    embed = Embed(title=f"🎭 막간 행동 선언: {call_sign}", color=0x9999ff)
+    embed.add_field(name="📍 장소", value=장소, inline=False)
+    embed.add_field(name="📝 행동", value=행동, inline=False)
+    embed.set_footer(text=f"소모된 막간 티켓: 1장")
+
+    await interaction.response.send_message(embed=embed)
+막간.autocomplete("call_sign")(call_sign_autocomplete)
+
+# 막간 종료 및 보상 기록 명령어
+@tree.command(name="막간종료", description="막간 행동에 대한 결과를 기록합니다.")
+@app_commands.describe(
+    call_sign="대상 용병 콜사인",
+    rp="RP 막간 여부 (예/아니오)",
+    stress="스트레스 소모량",
+    reward_desc="보상 설명",
+    item="지급할 아이템 (선택 사항)"
+)
+async def 막간종료(interaction: discord.Interaction, call_sign: str, rp: str, stress: int, reward_desc: str, item: str = None):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("🚫 관리자만 사용할 수 있습니다.", ephemeral=True)
+        return
+
+    data = get_player(call_sign)
+    if not data:
+        await interaction.response.send_message("❌ 존재하지 않는 콜사인입니다.", ephemeral=True)
+        return
+
+    # 아이템 지급
+    if item:
+        inventory = data.get("items", [])
+        inventory.append(item)
+        data["items"] = inventory
+        save_player(call_sign, data)
+
+    # 기록용 카드 생성
+    embed = Embed(title=f"📘 막간 종료 보고서: {call_sign}", color=0x66ccff)
+    embed.add_field(name="🎭 RP 막간 여부", value=rp, inline=False)
+    embed.add_field(name="💢 스트레스 소모", value=str(stress), inline=False)
+    embed.add_field(name="🎁 보상 요약", value=reward_desc, inline=False)
+
+    await interaction.response.send_message(embed=embed)
+막간종료.autocomplete("call_sign")(call_sign_autocomplete)
 
 bot.run(os.environ['DISCORD_TOKEN'])
