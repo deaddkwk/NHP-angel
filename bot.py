@@ -11,6 +11,19 @@ tree = bot.tree
 
 keep_alive()  # Render 절전 모드 방지용 웹서버 실행
 
+SHOP_ITEMS = {
+    "메크 라이선스": {"cost": 500, "growth_key": "라이선스"},
+    "재능": {"cost": 300, "growth_key": "재능"},
+    "교육": {"cost": 200, "growth_key": "스킬"},
+    "메크 라이선스 교체": {"cost": 200},
+    "재능 교체": {"cost": 300},
+    "메크 스킬 초기화": {"cost": 150},
+    "코어 보너스 교체": {"cost": 300},
+    "1랭크 임무 해금": {"cost": 100},
+    "2랭크 임무 해금": {"cost": 200},
+    "3랭크 임무 해금": {"cost": 300},
+}
+
 DEFAULT_SHEET = {
     "license": [],
     "skills": [],
@@ -222,6 +235,64 @@ async def 임무보상지급(interaction: discord.Interaction, 콜사인들: str
         save_player(call_sign, data)
         results.append(f"✅ `{call_sign}`: {만나} 만나, {막간티켓} 티켓 지급")
     embed = Embed(title="🎁 임무 보상 지급 결과", description="\n".join(results), color=0x66cc99)
+    await interaction.response.send_message(embed=embed)
+# 상점리스트 명령어
+@tree.command(name="상점리스트", description="일반 구매 가능한 항목과 가격을 확인합니다.")
+async def 상점리스트(interaction):
+    embed = Embed(title="📋 상점 리스트", description="구매 가능한 항목과 가격입니다.", color=0x99ccff)
+    embed.add_field(name="📈 성장에 소모되는 항목", value="", inline=False)
+    for name, data in SHOP_ITEMS.items():
+        if "growth_key" in data:
+            embed.add_field(name=f"{data['cost']} 만나", value=name, inline=True)
+    embed.add_field(name="\u200b", value="\u200b", inline=False)
+    embed.add_field(name="🔄 교체/해금 항목", value="", inline=False)
+    for name, data in SHOP_ITEMS.items():
+        if "growth_key" not in data:
+            embed.add_field(name=f"{data['cost']} 만나", value=name, inline=True)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+# 일반구매 명령어
+@tree.command(name="일반구매", description="용병이 만나를 사용해 항목을 구매합니다.")
+@app_commands.describe(call_sign="대상 용병의 콜사인", 항목="구매할 항목 이름")
+async def 일반구매(interaction, call_sign: str, 항목: str):
+    user_id = str(interaction.user.id)
+    data = get_player(call_sign)
+    if not data:
+        await interaction.response.send_message("❌ 존재하지 않는 콜사인입니다.", ephemeral=True)
+        return
+    if data.get("owner") != user_id and not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("🚫 본인 소유의 용병만 구매할 수 있습니다.", ephemeral=True)
+        return
+    항목정보 = SHOP_ITEMS.get(항목)
+    if not 항목정보:
+        await interaction.response.send_message("❌ 존재하지 않는 항목입니다. `/상점리스트`로 확인해주세요.", ephemeral=True)
+        return
+
+    cost = 항목정보["cost"]
+    만나 = data.get("만나", 0)
+    if 만나 < cost:
+        await interaction.response.send_message(f"❌ 만나가 부족합니다. (보유: {만나} / 필요: {cost})", ephemeral=True)
+        return
+
+    # 만나 차감
+    data["만나"] -= cost
+
+    # 성장 비용 반영
+    if "growth_key" in 항목정보:
+        sheet = data.get("sheet", {})
+        growth = sheet.get("growth_cost", {})
+        key = 항목정보["growth_key"]
+        growth[key] = growth.get(key, 0) + cost
+        growth["총합"] = growth.get("총합", 0) + cost
+        sheet["growth_cost"] = growth
+        data["sheet"] = sheet
+
+    save_player(call_sign, data)
+
+    embed = Embed(title="💸 일반 구매 완료", color=0x66cc66)
+    embed.add_field(name="용병", value=call_sign, inline=True)
+    embed.add_field(name="구매 항목", value=항목, inline=True)
+    embed.add_field(name="소모한 만나", value=f"{cost} 만나", inline=True)
     await interaction.response.send_message(embed=embed)
 
 bot.run(os.environ['DISCORD_TOKEN'])
