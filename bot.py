@@ -389,7 +389,7 @@ class ExoticShop(commands.Cog):
         self.bot = bot
 
 # /익조틱리스트 명령어
-@app_commands.command(name='익조틱리스트', description='익조틱 상점의 항목들을 확인합니다.')
+@tree.command(name='익조틱리스트', description='익조틱 상점의 항목들을 확인합니다.')
 @app_commands.describe(query='페이지 번호 또는 항목 이름')
 async def exotic_list(interaction: discord.Interaction, query: str = '1'):
     if not os.path.exists(EXOTIC_SHOP_PATH):
@@ -438,7 +438,7 @@ async def exotic_list(interaction: discord.Interaction, query: str = '1'):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 # /익조틱구매 명령어
-@app_commands.command(name='익조틱구매', description='익조틱 항목을 구매합니다.')
+@tree.command(name='익조틱구매', description='익조틱 항목을 구매합니다.')
 @app_commands.describe(callsign='용병 콜사인', item='구매할 익조틱 항목 이름')
 async def exotic_buy(interaction: discord.Interaction, callsign: str, item: str):
     if not os.path.exists(EXOTIC_SHOP_PATH):
