@@ -468,4 +468,5 @@ class Scan(commands.Cog):
 async def setup(bot):
     await bot.add_cog(Scan(bot))
 
+bot.load_extension("cogs.scan")
 bot.run(os.environ['DISCORD_TOKEN'])
