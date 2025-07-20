@@ -11,7 +11,7 @@ tree = bot.tree
 
 keep_alive()  # Render 절전 모드 방지용 웹서버 실행
 
-EXOTIC_SHOP_PATH = './exotic_shop.txt'
+EXOTIC_SHOP_PATH = os.path.join(os.path.dirname(__file__), 'exotic_shop.txt')
 
 FIELD_CHOICES = ["license", "skills", "talents", "core_bonus", "hase", "growth"]
 
