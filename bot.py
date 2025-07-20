@@ -388,93 +388,105 @@ class ExoticShop(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    # /익조틱리스트 명령어
-    @app_commands.command(name='익조틱리스트', description='익조틱 상점의 항목을 확인합니다.')
-    @app_commands.describe(query='페이지 번호 또는 항목명')
-    async def exotic_list(self, interaction: discord.Interaction, query: str = '1'):
-        if not os.path.exists(EXOTIC_SHOP_PATH):
-            await interaction.response.send_message('익조틱 상점 리스트 파일이 없습니다.', ephemeral=True)
-            return
+# /익조틱리스트 명령어
+@app_commands.command(name='익조틱리스트', description='익조틱 상점의 항목들을 확인합니다.')
+@app_commands.describe(query='페이지 번호 또는 항목 이름')
+async def exotic_list(interaction: discord.Interaction, query: str = '1'):
+    if not os.path.exists(EXOTIC_SHOP_PATH):
+        await interaction.response.send_message('익조틱 상점 리스트 파일이 없습니다.', ephemeral=True)
+        return
 
-        with open(EXOTIC_SHOP_PATH, 'r', encoding='utf-8') as f:
-            lines = [line.strip() for line in f if line.strip() and '|' in line]
+    with open(EXOTIC_SHOP_PATH, 'r', encoding='utf-8') as f:
+        lines = [line.strip() for line in f if line.strip()]
 
-        # 항목명 상세 조회
-        if not query.isdigit():
-            for line in lines:
-                name, price, desc = [x.strip() for x in line.split('|', 2)]
-                if query in name:
-                    embed = discord.Embed(title=f"익조틱 항목: {name}", color=0x9966cc)
-                    embed.add_field(name="가격", value=f"{price} 만나", inline=False)
-                    embed.add_field(name="설명", value=desc, inline=False)
-                    await interaction.response.send_message(embed=embed, ephemeral=True)
-                    return
-            await interaction.response.send_message(f"'{query}'에 해당하는 항목을 찾을 수 없습니다.", ephemeral=True)
-            return
-
-        # 페이지 출력
+    # 숫자면 페이지, 문자면 항목 검색
+    if query.isdigit():
         page = int(query)
         per_page = 10
         start = (page - 1) * per_page
         end = start + per_page
-
         shown = lines[start:end]
+
         if not shown:
             await interaction.response.send_message('해당 페이지에 항목이 없습니다.', ephemeral=True)
             return
 
-        embed = discord.Embed(title=f"익조틱 상점 리스트 - 페이지 {page}", color=0x9966cc)
+        embed = discord.Embed(title=f'익조틱 상점 - 페이지 {page}', color=0x9933cc)
         for line in shown:
-            name, price, _ = [x.strip() for x in line.split('|', 2)]
-            embed.add_field(name=name, value=f"가격: {price} 만나", inline=False)
+            parts = line.split('|')
+            if len(parts) >= 2:
+                name = parts[0].strip()
+                price = parts[1].strip()
+                embed.add_field(name=name, value=f'{price} 만나', inline=False)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    else:
+        # 항목 이름으로 검색
+        found = None
+        for line in lines:
+            if line.startswith(query):
+                found = line
+                break
 
+        if not found:
+            await interaction.response.send_message('해당 항목을 찾을 수 없습니다.', ephemeral=True)
+            return
+
+        name, price, *desc = [part.strip() for part in found.split('|')]
+        description = desc[0] if desc else '설명 없음'
+        embed = discord.Embed(title=f'익조틱 항목: {name}', description=description, color=0xcc66ff)
+        embed.add_field(name='가격', value=f'{price} 만나', inline=True)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    # /익조틱구매 명령어
-    @app_commands.command(name='익조틱구매', description='익조틱 항목을 구매합니다.')
-    @app_commands.describe(callsign='용병 콜사인', item_name='구매할 익조틱 항목명')
-    async def exotic_buy(self, interaction: discord.Interaction, callsign: str, item_name: str):
-        from firebase_admin import firestore
-        db = firestore.client()
-        doc_ref = db.collection('mercenaries').document(callsign)
-        doc = doc_ref.get()
+# /익조틱구매 명령어
+@app_commands.command(name='익조틱구매', description='익조틱 항목을 구매합니다.')
+@app_commands.describe(callsign='용병 콜사인', item='구매할 익조틱 항목 이름')
+async def exotic_buy(interaction: discord.Interaction, callsign: str, item: str):
+    if not os.path.exists(EXOTIC_SHOP_PATH):
+        await interaction.response.send_message('익조틱 상점 리스트 파일이 없습니다.', ephemeral=True)
+        return
 
-        if not doc.exists:
-            await interaction.response.send_message(f"콜사인 '{callsign}' 을 찾을 수 없습니다.", ephemeral=True)
-            return
+    # 항목 검색
+    with open(EXOTIC_SHOP_PATH, 'r', encoding='utf-8') as f:
+        lines = [line.strip() for line in f if line.strip()]
 
-        data = doc.to_dict()
-        mana = data.get('만나', 0)
+    selected = None
+    for line in lines:
+        if line.startswith(item):
+            selected = line
+            break
 
-        if not os.path.exists(EXOTIC_SHOP_PATH):
-            await interaction.response.send_message('익조틱 상점 리스트 파일이 없습니다.', ephemeral=True)
-            return
+    if not selected:
+        await interaction.response.send_message('해당 항목을 찾을 수 없습니다.', ephemeral=True)
+        return
 
-        with open(EXOTIC_SHOP_PATH, 'r', encoding='utf-8') as f:
-            found = False
-            for line in f:
-                if '|' not in line:
-                    continue
-                name, price, desc = [x.strip() for x in line.strip().split('|', 2)]
-                if item_name in name:
-                    found = True
-                    price = int(price)
-                    if mana < price:
-                        await interaction.response.send_message(f"만나가 부족합니다. (보유: {mana}, 필요: {price})", ephemeral=True)
-                        return
-                    doc_ref.update({'만나': mana - price})
-                    embed = discord.Embed(title=f"'{name}' 구매 완료", color=0x33cc99)
-                    embed.add_field(name="설명", value=desc, inline=False)
-                    embed.add_field(name="차감된 만나", value=f"{price} 만나", inline=True)
-                    embed.add_field(name="잔여 만나", value=f"{mana - price} 만나", inline=True)
-                    await interaction.response.send_message(embed=embed)
-                    break
+    name, price_str, *desc = [part.strip() for part in selected.split('|')]
+    try:
+        price = int(price_str)
+    except ValueError:
+        await interaction.response.send_message('가격 정보가 잘못되었습니다.', ephemeral=True)
+        return
 
-            if not found:
-                await interaction.response.send_message(f"'{item_name}' 항목을 찾을 수 없습니다.", ephemeral=True)
+    # 만나 차감 처리
+    from firebase_admin import firestore
+    db = firestore.client()
+    user_ref = db.collection('users').document(callsign)
+    user_data = user_ref.get().to_dict()
 
+    if not user_data:
+        await interaction.response.send_message(f'{callsign} 용병 정보를 찾을 수 없습니다.', ephemeral=True)
+        return
 
-async def setup(bot):
-    await bot.add_cog(ExoticShop(bot))
+    current_manna = user_data.get('manna', 0)
+    if current_manna < price:
+        await interaction.response.send_message(f'만나가 부족합니다. 현재 만나: {current_manna}', ephemeral=True)
+        return
+
+    user_ref.update({'manna': current_manna - price})
+
+    embed = discord.Embed(title='익조틱 항목 구매 완료', color=0x66ff66)
+    embed.add_field(name='용병', value=callsign, inline=True)
+    embed.add_field(name='구매 항목', value=name, inline=True)
+    embed.add_field(name='차감된 만나', value=str(price), inline=True)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 bot.run(os.environ['DISCORD_TOKEN'])
