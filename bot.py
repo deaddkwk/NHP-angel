@@ -441,7 +441,7 @@ async def scan(interaction: discord.Interaction, scan_number: str):
         i_start = content.index('![[') + 3
         i_end = content.index(']]', i_start)
         image_name = content[i_start:i_end]
-        image_url = f'https://raw.githubusercontent.com/deaddkwk/NHP-angel/main/Scan_list/{thumbnail}'
+        image_url = f'https://raw.githubusercontent.com/deaddkwk/NHP-angel/main/Scan_list/{image_name}'
 
     embed = discord.Embed(title=name, color=0xffcc00)
     embed.add_field(name='클래스 / 티어', value=class_tier, inline=False)
