@@ -11,6 +11,8 @@ tree = bot.tree
 
 keep_alive()  # Render 절전 모드 방지용 웹서버 실행
 
+SCAN_FOLDER = './Scan_list'  # 서버 내 스캔 폴더 경로
+
 FIELD_CHOICES = ["license", "skills", "talents", "core_bonus", "hase", "growth"]
 
 async def field_autocomplete(interaction: discord.Interaction, current: str):
@@ -382,5 +384,88 @@ async def 막간종료(interaction: discord.Interaction, call_sign: str, rp: str
 
     await interaction.response.send_message(embed=embed)
 막간종료.autocomplete("call_sign")(call_sign_autocomplete)
+
+class Scan(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    # /스캔리스트 명령어
+    @app_commands.command(name='스캔리스트', description='등록된 SCAN 목록을 확인합니다.')
+    @app_commands.describe(page='페이지 번호 (기본값: 1)')
+    async def scan_list(self, interaction: discord.Interaction, page: int = 1):
+        files = [f for f in os.listdir(SCAN_FOLDER) if f.endswith('.md') and f.startswith('SCAN_')]
+        files.sort()
+
+        per_page = 10
+        start = (page - 1) * per_page
+        end = start + per_page
+        shown = files[start:end]
+
+        if not shown:
+            await interaction.response.send_message('해당 페이지에 항목이 없습니다.', ephemeral=True)
+            return
+
+        embed = discord.Embed(title=f'SCAN 리스트 - 페이지 {page}', color=0x88ccff)
+        for file in shown:
+            number_name = file.replace('SCAN_', '').replace('.md', '').replace('_', ' - ', 1)
+            md_path = os.path.join(SCAN_FOLDER, file)
+            with open(md_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            # 이미지 경로 추출
+            thumbnail = None
+            if '![[' in content:
+                start = content.index('![[') + 3
+                end = content.index(']]', start)
+                thumbnail = content[start:end]
+            embed.add_field(name=number_name, value=f'명령어: `/스캔 {file[5:8]}`', inline=False)
+            if thumbnail:
+                embed.set_thumbnail(url=f'https://raw.githubusercontent.com/deaddkwk/NHP-angel/main/Scan_list/{thumbnail}')
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    # /스캔 명령어
+    @app_commands.command(name='스캔', description='특정 SCAN의 세부 정보를 확인합니다.')
+    @app_commands.describe(scan_number='SCAN 번호 (예: 002)')
+    async def scan(self, interaction: discord.Interaction, scan_number: str):
+        scan_file = None
+        for f in os.listdir(SCAN_FOLDER):
+            if f.startswith(f'SCAN_{scan_number}') and f.endswith('.md'):
+                scan_file = f
+                break
+
+        if not scan_file:
+            await interaction.response.send_message(f'SCAN_{scan_number} 에 해당하는 항목을 찾을 수 없습니다.', ephemeral=True)
+            return
+
+        filepath = os.path.join(SCAN_FOLDER, scan_file)
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # 이미지 파싱
+        image_url = None
+        if '![[' in content:
+            start = content.index('![[') + 3
+            end = content.index(']]', start)
+            image_name = content[start:end]
+            image_url = f'https://raw.githubusercontent.com/deaddkwk/NHP-angel/main/Scan_list/{thumbnail}'
+
+        # 주요 정보 파싱 (예시)
+        lines = content.splitlines()
+        name = [line for line in lines if line.startswith('## Scan results')]
+        class_tier = [line for line in lines if line.startswith('### Class')]
+        systems = '\n'.join([line for line in lines if '### Systems' in line or line.startswith('  ')])
+
+        embed = discord.Embed(title=name[0][3:] if name else f'SCAN {scan_number}', color=0xffcc00)
+        if class_tier:
+            embed.add_field(name='클래스 / 티어', value=class_tier[0][8:], inline=False)
+        embed.add_field(name='시스템 설명', value=systems or '없음', inline=False)
+
+        if image_url:
+            embed.set_image(url=image_url)
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+async def setup(bot):
+    await bot.add_cog(Scan(bot))
 
 bot.run(os.environ['DISCORD_TOKEN'])
