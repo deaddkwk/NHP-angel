@@ -15,13 +15,6 @@ EXOTIC_SHOP_PATH = os.path.join(os.path.dirname(__file__), 'exotic_shop.txt')
 
 FIELD_CHOICES = ["license", "skills", "talents", "core_bonus", "hase", "growth"]
 
-async def field_autocomplete(interaction: discord.Interaction, current: str):
-    return [
-        app_commands.Choice(name=field, value=field)
-        for field in FIELD_CHOICES
-        if current.lower() in field.lower()
-    ][:25]
-
 SHOP_ITEMS = {
     "메크 라이선스": {"cost": 500, "growth_key": "라이선스"},
     "재능": {"cost": 300, "growth_key": "재능"},
@@ -349,6 +342,7 @@ async def 막간(interaction: discord.Interaction, call_sign: str, 장소: str, 
 
     await interaction.response.send_message(embed=embed)
 막간.autocomplete("call_sign")(call_sign_autocomplete)
+
 
 # 막간 종료 및 보상 기록 명령어
 @tree.command(name="막간종료", description="막간 행동에 대한 결과를 기록합니다.")
